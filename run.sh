@@ -444,6 +444,23 @@ info "global spend circuit-breaker set to \$$MSWEA_GLOBAL_COST_LIMIT"
 
 confirm "Proceed?" || { printf "\n  Aborted. Nothing was spent.\n\n"; exit 0; }
 
+# ------------------------------------------------------------ orphan cleanup
+# mini-swe-agent starts task containers with `sleep 2h`, so a crashed or
+# interrupted run leaves them running. They hold a reference to the image, which
+# makes `docker rmi` fail with "must be forced", and they quietly consume CPU
+# and memory for the rest of the two hours.
+ORPHANS=$(docker ps -q --filter "name=minisweagent-" --filter "name=pydbench-" 2>/dev/null | sort -u)
+if [ -n "$ORPHANS" ]; then
+  n=$(printf '%s\n' "$ORPHANS" | grep -c .)
+  step "Cleaning up $n leftover container(s) from a previous run"
+  if [ -n "${FRESH:-}" ] || confirm_yes "Remove them?"; then
+    printf '%s\n' "$ORPHANS" | xargs -r docker rm -f >/dev/null 2>&1 || true
+    ok "removed"
+  else
+    warn "left running -- they may block an image rebuild"
+  fi
+fi
+
 # ----------------------------------------------------------------- image build
 step "Building the evaluation environment"
 IMAGE=pydanticbench:base
