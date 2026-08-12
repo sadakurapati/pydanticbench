@@ -1,0 +1,98 @@
+# mini-swe-agent configuration for PydanticBench.
+#
+# Derived from the shipped benchmarks/swebench.yaml. Two things are specific to
+# this benchmark:
+#   * env_startup_command resets the container and applies the task's setup
+#     patch. mini-swe-agent renders this with jinja against the instance dict,
+#     which is what lets 100 tasks share one image.
+#   * step/cost limits are well below the stock defaults (250 / $3.00). Hitting
+#     a limit scores 0 and is reported separately as budget exhaustion, so the
+#     cap is visible in results rather than silently confounding them.
+
+run:
+  # The task's starting state, applied before the agent begins.
+  #
+  # This MUST stay a single line, and the patch MUST arrive base64-encoded.
+  # A previous version used a YAML folded scalar (">") wrapping a heredoc; YAML
+  # folding collapses newlines into spaces, which destroyed the heredoc, and the
+  # diff body was then executed as shell commands. Every instance failed with
+  # "syntax error near unexpected token" or "cat: unrecognized option '--git'".
+  #
+  # Base64 is inert to both YAML folding and shell parsing: one line, characters
+  # drawn only from [A-Za-z0-9+/=], no quotes, newlines, backticks or $.
+  #
+  # The trailing `git commit` is essential and was missing at first. The agent
+  # submits its work as `git diff`. If the injected defect is left uncommitted,
+  # HEAD is the *clean* tree -- so a CORRECT fix restores the file to its
+  # original content and `git diff` comes back empty. The better the model, the
+  # more reliably it scored zero. Committing the defect makes HEAD the buggy
+  # state, so the diff contains exactly the agent's repair.
+  env_startup_command: "bash -lc '/opt/bench/reset_state.sh && cd /testbed && printf %s {{ setup_patch_b64 }} | base64 -d > /tmp/setup.patch && git apply --whitespace=nowarn /tmp/setup.patch && rm -f /tmp/setup.patch && git add -A && git commit -q --no-verify -m task-setup'"
+
+agent:
+  system_template: |
+    You are a helpful assistant that can interact with a computer shell to solve programming tasks.
+  instance_template: |
+    <issue>
+    {{task}}
+    </issue>
+
+    <instructions>
+    You are a software engineer working in /testbed, the source tree of the
+    `pydantic` library. Diagnose and fix the issue described above.
+
+    ## Boundaries
+    - MODIFY: library source under /testbed/pydantic/
+    - DO NOT MODIFY: anything under /testbed/tests/, conftest.py, pyproject.toml,
+      setup.cfg, or any CI/packaging configuration.
+      Patches touching those paths score ZERO regardless of correctness.
+
+    ## Workflow
+    1. Reproduce the failure with a short script of your own.
+    2. Search the source to locate the cause. The failing behaviour and the
+       faulty code are often in different modules.
+    3. Fix the underlying cause, not the symptom.
+    4. Re-run your reproduction, then run the relevant existing tests to confirm
+       you have not regressed anything else.
+
+    ## Command execution
+    Each response must contain reasoning followed by at least one bash tool call.
+    Every action runs in a fresh subshell, so `cd` and environment changes do not
+    persist -- prefix commands with `cd /testbed && ...` as needed.
+    Use non-interactive flags; never invoke vi, nano, or anything that blocks.
+
+    ## Submission
+    When finished, submit in SEPARATE commands, in order:
+
+    Step 1: `git diff -- pydantic/ > patch.txt`
+    Step 2: inspect patch.txt and confirm it contains only your intended source changes.
+    Step 3: submit with EXACTLY this command:
+
+    ```bash
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat patch.txt
+    ```
+
+    You cannot continue working after submitting.
+    </instructions>
+  # 80 exhausted the budget on 2 of the first 5 real tasks. Cost, not steps,
+  # should be the binding constraint -- cost_limit still caps actual spend.
+  step_limit: 150
+  cost_limit: 1.00
+
+environment:
+  cwd: /testbed
+  timeout: 120
+  interpreter: ["bash", "-c"]
+  environment_class: docker
+  env:
+    PAGER: cat
+    MANPAGER: cat
+    LESS: -R
+    PYTHONHASHSEED: "0"
+    PIP_PROGRESS_BAR: "off"
+    TQDM_DISABLE: "1"
+
+model:
+  model_kwargs:
+    drop_params: true
+    temperature: 0.0

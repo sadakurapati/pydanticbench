@@ -1,0 +1,27 @@
+# local virtualenv -- its console scripts embed absolute paths, so it is not portable
+.venv/
+venv/
+
+# python caches
+__pycache__/
+*.pyc
+
+# OS cruft
+.DS_Store
+
+# benchmark run artefacts: per-model results, trajectories and logs are
+# machine- and run-specific. results/selftest.md is kept as evidence.
+results/*/
+results/summary.md
+!results/selftest.md
+
+# resumable-run state
+tasks/_validation_state.json
+
+# never commit credentials or transcripts that might contain them
+.env
+*.orig
+logs/chat-transcript.md
+
+# packaging output
+*.zip
