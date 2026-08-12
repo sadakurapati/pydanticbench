@@ -29,9 +29,10 @@ setup end to end before committing to a full run.
 
 ### What it will ask you
 
-`run.sh` verifies four things before spending anything: every configured model
+`run.sh` verifies five things before spending anything: every configured model
 answers a one-token probe, the image baseline is green, all 100 task patches
-apply inside the image, and the scorer passes its five controls.
+apply inside the image, a live task does not leak its own answer, and the scorer
+passes its five controls.
 
 | Prompt | Options | Notes |
 |---|---|---|
@@ -210,6 +211,7 @@ filtered so that no single half of the fix restores the failing tests.
 | Want to re-score without re-running agents | Re-run `scripts/05_score.py` against the existing `preds.json`. Scoring is independent of inference. |
 | `run.sh: line NNN: /Users/you/Library/Application: No such file or directory` | A path-with-spaces bug. Fixed — the agent command is held in a bash array rather than a string, so word splitting cannot tear it at `Application Support`. If you see this again, check for any unquoted `$VAR` you added. |
 | Every task scores 0.000 with reason `empty_patch`, and trajectories show the agent solving the problem | The injected defect must be **committed** during task setup, otherwise HEAD is the clean tree and a correct fix produces an empty `git diff`. Fixed in `configs/pydanticbench.yaml` (the startup command ends with `git commit`). If you changed that command, put the commit back. |
+| Scores look suspiciously high, or agents finish very fast | Run `python3 scripts/10_check_leaks.py --image pydanticbench:base`. If the task's git history has more than one commit, or `/opt/pristine/pydantic` exists, the environment is handing over the answer. Rebuild the image. |
 | Many tasks end in `LimitsExceeded` | Raise `step_limit` in `configs/pydanticbench.yaml`. It is 150; `cost_limit` remains the real spend ceiling. |
 | All models score 0.000 and the log says `Skipping N existing instances` | A previous failed run left `preds.json` behind, and mini-swe-agent counts any recorded instance as done — including ones that crashed. `run.sh` now detects this (all patches empty = failed run, not a bad model) and offers to clear it. Force it with `FRESH=1 ./run.sh`, or `rm -rf results/<model>`. |
 | `FileNotFoundError: ... preds.json` after a failed run | The agent produced no predictions, so there was nothing to score. `run.sh` now skips scoring for that model and reports it instead of crashing. Read the agent error above it. |
@@ -283,6 +285,7 @@ pydanticbench/
 │   ├── 07_selftest.py              scorer verification (5 controls)
 │   ├── 08_verify_tasks_apply.py    confirms every task applies inside the image
 │   ├── 09_check_models.py          model availability check + interactive picker
+│   ├── 10_check_leaks.py           confirms a task does not hand over its answer
 │   └── pytest_scope.py             single source of truth for the test scope
 ├── tasks/
 │   ├── tasks.jsonl                 the 100 tasks

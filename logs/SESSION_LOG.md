@@ -507,6 +507,49 @@ A second finding from the same runs: 2 of 5 tasks ended in `LimitsExceeded` at
 `step_limit: 80`. A 40% exhaustion rate confounds capability with budget, so the
 limit is now 150, with `cost_limit` left as the real ceiling.
 
+## 11j. The fix that leaked the answer
+
+Committing the injected defect (§11i) fixed the empty-diff problem and created a
+worse one. With the defect committed on top of the clean base, the task's own
+git history contained the answer:
+
+    $ git show HEAD
+    -            use_inspect=not hasattr(cls, '__is_pydantic_dataclass__'),
+    +            use_inspect=hasattr(cls, '__is_pydantic_dataclass__'),
+
+`git revert HEAD` would have solved any task without reading a line of source.
+
+Auditing for siblings found a second one that predated it: the image snapshotted
+a clean copy of the source at `/opt/pristine/pydantic` for the reset path, so
+`diff -r /opt/pristine/pydantic /testbed/pydantic` printed the defect directly.
+That one had been present since the first Dockerfile.
+
+Both are closed:
+
+- the task's history is **re-initialised** after the patch is applied, making the
+  buggy tree the root commit — `git log` shows one commit and `git show` emits
+  the whole tree as an initial add, which identifies nothing;
+- the image no longer ships a clean source snapshot. Only `tests/` is preserved,
+  which is required for the anti-tamper restore and gives nothing away. Source
+  resets come from the git tag instead.
+
+Verified across all 100 tasks: 100/100 apply and commit, 0 have history longer
+than one commit, 0 reveal the defect through history, and 0 lose the ability to
+produce a submittable diff after a correct fix.
+
+`scripts/10_check_leaks.py` now runs as a pre-spend gate. It starts a real
+container, executes the real startup command, and asserts those same four
+properties from the agent's point of view. That is the point: the four gates
+that already existed all exercise the *scoring* path, and all three bugs that
+mattered lived on the *agent* path.
+
+A residual leak is worth stating rather than hiding: the agent container has
+network access, and pydantic v2.13.4 is on PyPI. A determined agent could
+`pip download` the release and diff against it. Closing that means either
+denying the agent network — which breaks legitimate use of `pip` — or building
+tasks from an unreleased commit. It is a real limitation of benchmarking a
+published library at a tagged version.
+
 ## 12. Final state
 
 | Metric | Value |

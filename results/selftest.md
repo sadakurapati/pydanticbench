@@ -1,6 +1,6 @@
 # Scorer self-test
 
-Verifies scoring behaviour against known-value inputs (2-task sample, docker backend).
+Verifies scoring behaviour against known-value inputs (2-task sample, local backend).
 
 | Control | n | Mean score | Expected | Result |
 |---|---:|---:|---|---|

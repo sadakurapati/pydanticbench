@@ -53,11 +53,16 @@ RUN pip install --no-cache-dir -e . \
         tzdata \
         ruff
 
-# Pristine snapshots. tests/ is restored from here immediately before scoring,
-# so tampering with the grading criteria cannot succeed even if an agent tries.
+# Pristine snapshot of the TESTS only. These are restored immediately before
+# scoring, so tampering with the grading criteria cannot succeed.
+#
+# Deliberately NOT a copy of pydantic/. An earlier version snapshotted the clean
+# source here too, which meant `diff -r /opt/pristine/pydantic /testbed/pydantic`
+# printed the injected defect and solved any task in one command. Source is
+# restored from the git tag instead (see bench/reset_state.sh), which the agent
+# cannot use the same way because its history is re-initialised at task start.
 RUN mkdir -p /opt/pristine \
-    && cp -a tests /opt/pristine/tests \
-    && cp -a pydantic /opt/pristine/pydantic
+    && cp -a tests /opt/pristine/tests
 
 # Remove every route back to the upstream fix. Without this an agent can simply
 # `git log` / `git fetch` and read the answer, silently invalidating results.

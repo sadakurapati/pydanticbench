@@ -208,15 +208,29 @@ they rot, and a dead identifier otherwise fails only after an approved budget.
 When one is unusable the runner lists what the key can reach, ranks it into
 lite/flash/pro tiers and offers a ladder.
 
-Four gates run before any spend: the image baseline must be green, all 100 task
+Five gates run before any spend: the image baseline must be green, all 100 task
 patches must apply *inside the image*, the scorer must pass its five controls,
-and every model must answer a one-token probe.
+every model must answer a one-token probe, and a live task must not leak its
+own answer.
 
-None of them caught the submission bug described below, for an instructive
-reason: the scorer's controls feed patches to the scorer directly, bypassing the
-`git diff` path an agent actually uses to submit. Every gate exercised a code
-path adjacent to the broken one. A verification step is only as good as the path
-it exercises — this project learned that twice.
+That last gate exists because fixing the submission bug below introduced two
+ways for a task to give itself away, and nothing else would have noticed.
+Committing the defect on top of the clean base put the answer in the history:
+`git show HEAD` printed the injected mutation as a one-line delta, and
+`git revert HEAD` solved any task without reading code. Separately, the image
+kept a clean copy of the source at `/opt/pristine/pydantic`, so `diff -r` against
+`/testbed/pydantic` printed the defect outright.
+
+Both are closed. The task's git history is re-initialised so the buggy tree is
+the *root* commit — nothing to diff against — and the image no longer ships a
+clean source snapshot; the reset path restores from the git tag instead.
+Verified across all 100 tasks: one commit each, no delta in history, and a
+correct fix still produces a submittable patch.
+
+The pattern is now three-for-three: the baseline check, the task-application
+check, the scorer controls and the model probe all exercise the *scoring* path,
+and every bug that mattered lived on the *agent* path. A verification step is
+only as good as the code path it exercises.
 
 Limits are `step_limit: 80`, `cost_limit: $1.00`, below the stock 250 / $3.00.
 Hitting a limit scores 0 and is reported separately as budget exhaustion, so the

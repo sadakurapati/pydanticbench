@@ -500,6 +500,12 @@ else
   die "task patches do not apply inside the image -- see the message above"
 fi
 
+# ------------------------------------------------------------------- integrity
+step "Checking a task does not leak its own answer"
+if ! "$PY" scripts/10_check_leaks.py --image "$IMAGE" -n 3; then
+  die "the environment hands the agent the answer -- results would be meaningless"
+fi
+
 # -------------------------------------------------------------------- selftest
 step "Verifying the scorer"
 if [ -n "${SKIP_SELFTEST:-}" ]; then
