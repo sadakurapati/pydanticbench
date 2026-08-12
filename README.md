@@ -29,9 +29,9 @@ setup end to end before committing to a full run.
 
 ### What it will ask you
 
-`run.sh` verifies three things before spending anything: the image baseline is
-green, all 100 task patches apply inside the image, and the scorer passes its
-four controls.
+`run.sh` verifies four things before spending anything: every configured model
+answers a one-token probe, the image baseline is green, all 100 task patches
+apply inside the image, and the scorer passes its five controls.
 
 | Prompt | Options | Notes |
 |---|---|---|
@@ -123,7 +123,7 @@ never into your system Python.
 
 ## 2. Cost and runtime
 
-Per-task caps are `step_limit: 80` and `cost_limit: $1.00`
+Per-task caps are `step_limit: 150` and `cost_limit: $1.00`
 (`configs/pydanticbench.yaml`), deliberately below mini-swe-agent's defaults of
 250 / $3.00. Hitting a cap scores 0 and is reported as budget exhaustion.
 
@@ -280,7 +280,10 @@ pydanticbench/
 │   ├── 04_run_benchmark.sh         non-interactive runner (run.sh wraps this logic)
 │   ├── 05_score.py                 automatic scoring (docker + local backends)
 │   ├── 06_report.py                aggregation into result tables
-│   └── 07_selftest.py              scorer verification
+│   ├── 07_selftest.py              scorer verification (5 controls)
+│   ├── 08_verify_tasks_apply.py    confirms every task applies inside the image
+│   ├── 09_check_models.py          model availability check + interactive picker
+│   └── pytest_scope.py             single source of truth for the test scope
 ├── tasks/
 │   ├── tasks.jsonl                 the 100 tasks
 │   ├── hf/train.jsonl              same set, in mini-swe-agent's --subset layout
